@@ -22,6 +22,12 @@
 #define PWR_MGMT_1       0x6B // Device defaults to the SLEEP mode
 #define PWR_MGMT_2       0x6C
 
+#define ROLL_MAX 45
+#define ROLL_MIN -45
+#define PITCH_MAX 45
+#define PITCH_MIN -45
+#define GYRO_RATE_MAX 300
+
 FILE *f;
 
 //Keyboard interfacing globals
@@ -70,6 +76,49 @@ float roll_angle=0;
 float PI = 3.14159;
 int callib_flag = 0; 
 
+float roll_accel = roll_angle;
+float roll_next;
+float A = 0.02;
+float roll_curr = 0;
+float roll_gyro_delta;
+float roll_sum = 0;
+
+float pitch_accel = pitch_angle;
+float pitch_next;
+float B = 0.02;
+float pitch_curr = 0;
+float pitch_gyro_delta;
+float pitch_sum = 0;
+
+float pitch_smooth = 0;
+float roll_smooth = 0;
+
+//when cntrl+c pressed, kill motors
+
+void trap(int signal)
+
+{
+
+   
+ 
+   printf("ending program\n\r");
+
+   run_program=0;
+}
+
+void safety_check(){
+  if (roll_smooth > ROLL_MAX || roll_smooth < ROLL_MIN){
+    printf("too much roll!\n");
+    trap(1);
+  } else if (pitch_smooth > PITCH_MAX || pitch_smooth < PITCH_MIN){
+    printf("too much pitch!\n");
+    trap(1);
+  } else if (abs(imu_data[0]) > GYRO_RATE_MAX || abs(imu_data[1]) > GYRO_RATE_MAX || abs(imu_data[2]) > GYRO_RATE_MAX){
+    printf("to much gyro!!!\n");
+    trap(1);
+  }
+}
+
 //function to add
 void setup_keyboard()
 {
@@ -92,19 +141,6 @@ void setup_keyboard()
   /* Write a string to the shared memory segment.  */ 
   //sprintf (shared_memory, "test!!!!."); 
 
-}
-
-//when cntrl+c pressed, kill motors
-
-void trap(int signal)
-
-{
-
-   
- 
-   printf("ending program\n\r");
-
-   run_program=0;
 }
 
 
@@ -173,8 +209,10 @@ int main (int argc, char *argv[])
           trap(1);
         }
       } 
+
       read_imu();      
       update_filter();   
+      safety_check();
     }
     return 0;
 }
@@ -299,22 +337,10 @@ void read_imu()
 
   if (callib_flag){
     // printf("%10.5f \t %10.5f \t %10.5f \t %10.5f \t %10.5f\n", imu_data[0], imu_data[1], imu_data[2], roll_angle, pitch_angle);
+    // printf("%10.5f \t %10.5f \t %10.5f \t %10.5f \t %10.5f\n", imu_data[0], imu_data[1], imu_data[2], roll_smooth, pitch_smooth);
+
   }
 }
-
-float roll_accel = roll_angle;
-float roll_next;
-float A = 0.02;
-float roll_curr = 0;
-float roll_gyro_delta;
-float roll_sum = 0;
-
-float pitch_accel = pitch_angle;
-float pitch_next;
-float B = 0.02;
-float pitch_curr = 0;
-float pitch_gyro_delta;
-float pitch_sum = 0;
 
 void update_filter()
 {
@@ -350,6 +376,9 @@ void update_filter()
   // printf("accel: %f\n", pitch_accel);
   pitch_next = pitch_accel * B + (1-B) * (pitch_gyro_delta + pitch_curr);
   pitch_curr = pitch_next;
+
+  pitch_smooth = pitch_curr;
+  roll_smooth = roll_curr;
 
   // /*File IO*/
   // if (val == 'r'){
